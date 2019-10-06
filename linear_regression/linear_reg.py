@@ -1,6 +1,8 @@
 import numpy as np
 from sklearn import datasets
 
+import functions as fun
+
 
 class LinearReg:
     """线性回归模型"""
@@ -22,16 +24,16 @@ class LinearReg:
 
         return np.dot(x, self.w)
 
-    def loss(self, x, y):
+    def loss(self, yp, y):
         """
         均方误差损失函数
-        :param x: 数据
+        :param yp: 预测值
         :param y: 真实值
         :return:  误差值
         """
-        return ((self.predict(x, True) - y)**2 / (2*y.shape[0])).sum()
+        return fun.mean_squared_error(yp, y)
 
-    def fit(self, x, y, opt='gradient', iters=100, alpha=0.1, tol=1e-10):
+    def fit(self, x, y, opt='gradient', iters=100, alpha=0.1, tol=1e-10, r=0):
         """
         模型训练函数
         :param x: 数据
@@ -40,11 +42,12 @@ class LinearReg:
         :param iters: 梯度下降最大迭代次数
         :param alpha: 梯度下降学习率
         :param tol:  梯度下降收敛条件
+        :param r: 正规化参数，默认L2 regularization
         :return: None
         """
         # 数据调整
-        x.reshape(x.shape[0], -1)
-        y.reshape(x.shape[0], -1)
+        x = x.reshape(x.shape[0], -1)
+        y = y.reshape(y.shape[0], -1)
 
         # 第一列堆叠ones向量，因为w0其实就是参数b，此时对应x0应该=1
         x = np.hstack((np.ones([x.shape[0], 1]), x))
@@ -54,7 +57,9 @@ class LinearReg:
 
         # 最小二乘法
         if opt == 'normal':
-            self.w = np.dot(np.dot(np.linalg.inv(np.dot(x.T, x)), x.T), y)
+            L = np.eye(x.shape[1])
+            L[0][0] = 0
+            self.w = np.dot(np.dot(np.linalg.inv(np.dot(x.T, x)+r*L), x.T), y)
             self.args['opt'] = 'normal equation'
             self.args['loss'].append(self.loss(x, y))
             return
@@ -65,9 +70,12 @@ class LinearReg:
 
         i = 0
         while i < iters:
-            self.w = self.w - alpha / x.shape[0] * x.T.dot(x.dot(self.w) - y)
+            yp = self.predict(x, True)
+            w0 = self.w[0] - alpha / x.shape[0] * x.T[0].dot(yp - y)
+            self.w[1:] = self.w[1:] * (1-alpha*r/x.shape[0]) - alpha / x.shape[0] * x.T[1:].dot(yp - y)
+            self.w[0] = w0
             i += 1
-            _loss = self.loss(x, y)
+            _loss = self.loss(yp, y)
             self.args['loss'].append(_loss)
             if _loss < tol:
                 break
@@ -83,8 +91,7 @@ if __name__ == '__main__':
     yt = boston.target.reshape(-1, 1)
 
     line_reg = LinearReg()
-    line_reg.fit(xt, yt, iters=1000, alpha=0.1)
-    (range(len(line_reg.args['loss'])), line_reg.args['loss'])
+    line_reg.fit(xt, yt, iters=1000, alpha=0.1, r=1)
 
 
 
